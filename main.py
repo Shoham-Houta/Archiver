@@ -49,6 +49,7 @@ def main():
         style="{",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
+
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
     try:
