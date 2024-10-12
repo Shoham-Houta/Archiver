@@ -25,7 +25,7 @@ else:
     source: str = ""
 
 
-def entry_handler(entry, dist_path, logger):
+def file_entry_handler(entry, dist_path, logger):
     dir_path = dist_path + fr"\{datetime.datetime.now().strftime("%d-%m-%Y %H-%M")}"
     if not os.path.exists(dir_path):
         os.mkdir(dir_path)
@@ -58,16 +58,16 @@ def main():
             with os.scandir(source) as entries:
                 for entry in entries:
                     if ".jpg" in entry.name or ".png" in entry.name:
-                        entry_handler(entry, img_dir, logger)
+                        file_entry_handler(entry, img_dir, logger)
 
                     if ".docx" in entry.name:
-                        entry_handler(entry, doc_dir, logger)
+                        file_entry_handler(entry, doc_dir, logger)
 
                     if ".pptx" in entry.name:
-                        entry_handler(entry, presentations_dir, logger)
+                        file_entry_handler(entry, presentations_dir, logger)
 
                     if ".pdf" in entry.name:
-                        entry_handler(entry, pdf_dir, logger)
+                        file_entry_handler(entry, pdf_dir, logger)
 
     except KeyboardInterrupt:
         logger.info("Script was stopped!")
