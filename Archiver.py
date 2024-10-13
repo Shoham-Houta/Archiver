@@ -3,7 +3,13 @@ import platform
 import os
 import shutil
 import datetime
+import sys
 import time
+
+import servicemanager
+import win32event
+import win32service
+import win32serviceutil
 from py7zr import unpack_7zarchive
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
@@ -55,47 +61,72 @@ def file_entry_handler(entry, dist_path, logger):
         logger.info(f"{entry.name} --> {dir_path}")
 
 
-def main():
-    event_handler: LoggingEventHandler = LoggingEventHandler()
-    observer: Observer = Observer()
-    observer.schedule(event_handler, source, recursive=True)
-    observer.start()
-    logger = logging.Logger(name="Archiver", level=logging.INFO)
-    file_handler = logging.FileHandler(logging_dir + r"\archiver.log", mode='a', encoding="utf-8")
-    formatter = logging.Formatter(
-        "{asctime} - {levelname} - {message}",
-        style="{",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
+class ArchiverService(win32serviceutil.ServiceFramework):
+    _svc_name_ = "ArchiverService"
+    _svc_display_name_ = "Archiver"
+    _svc_description_ = "downloads manager"
 
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
-    try:
-        while True:
-            time.sleep(1)
-            with os.scandir(source) as entries:
-                for entry in entries:
-                    if ".jpg" in entry.name or ".png" in entry.name:
-                        file_entry_handler(entry, img_dir, logger)
+    def __init__(self, args):
+        win32serviceutil.ServiceFramework.__init__(self, args)
+        self.event = win32event.CreateEvent(None, 0, 0, None)
 
-                    if ".docx" in entry.name:
-                        file_entry_handler(entry, doc_dir, logger)
+    def GetAcceptedControls(self):
+        result = win32serviceutil.ServiceFramework.GetAcceptedControls(self)
+        result |= win32service.SERVICE_ACCEPT_PRESHUTDOWN
+        return result
 
-                    if ".pptx" in entry.name:
-                        file_entry_handler(entry, presentations_dir, logger)
+    def SvcDoRun(self):
+        event_handler: LoggingEventHandler = LoggingEventHandler()
+        observer: Observer = Observer()
+        observer.schedule(event_handler, source, recursive=True)
+        observer.start()
+        logger = logging.Logger(name="Archiver", level=logging.INFO)
+        file_handler = logging.FileHandler(logging_dir + r"\archiver.log", mode='a', encoding="utf-8")
+        formatter = logging.Formatter(
+            "{asctime} - {levelname} - {message}",
+            style="{",
+            datefmt="%Y-%m-%d %H:%M:%S"
+        )
 
-                    if ".pdf" in entry.name:
-                        file_entry_handler(entry, pdf_dir, logger)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        try:
+            while True:
+                time.sleep(1)
+                with os.scandir(source) as entries:
+                    for entry in entries:
+                        if ".jpg" in entry.name or ".png" in entry.name:
+                            file_entry_handler(entry, img_dir, logger)
 
-                    if ".zip" in entry.name:
-                        compressed_entry_handler(entry, source, logger, 'zip')
-                    if ".7z" in entry.name:
-                        compressed_entry_handler(entry, source, logger, '7z')
+                        if ".docx" in entry.name:
+                            file_entry_handler(entry, doc_dir, logger)
 
-    except KeyboardInterrupt:
-        logger.info("Script was stopped!")
-        exit(0)
+                        if ".pptx" in entry.name:
+                            file_entry_handler(entry, presentations_dir, logger)
 
+                        if ".pdf" in entry.name:
+                            file_entry_handler(entry, pdf_dir, logger)
+
+                        if ".zip" in entry.name:
+                            compressed_entry_handler(entry, source, logger, 'zip')
+                        if ".7z" in entry.name:
+                            compressed_entry_handler(entry, source, logger, '7z')
+
+        except KeyboardInterrupt:
+            logger.info("Script was stopped!")
+            exit(0)
+        finally:
+            observer.stop()
+            observer.join()
+
+    def SvcStop(self):
+        self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
+        win32event.SetEvent(self.event)
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 1:
+        servicemanager.Initialize()
+        servicemanager.PrepareToHostSingle(ArchiverService)
+        servicemanager.StartServiceCtrlDispatcher()
+    else:
+        win32serviceutil.HandleCommandLine(ArchiverService)
