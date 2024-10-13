@@ -4,6 +4,7 @@ import os
 import shutil
 import datetime
 import time
+from py7zr import unpack_7zarchive
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
 
@@ -23,6 +24,23 @@ else:
     pdf_dir: str = ""
     presentations_dir: str = ""
     source: str = ""
+
+
+def compressed_entry_handler(entry, dist_path, logger, ext):
+    shutil.register_unpack_format('7z', [".7z"], unpack_7zarchive)
+    extraction_path = dist_path + rf"\{str(entry.name).removesuffix("." + ext)}"
+    if not os.path.exists(extraction_path):
+        os.mkdir(extraction_path)
+        logger.info(f"{extraction_path} - Folder created!")
+        shutil.unpack_archive(entry.path, extraction_path, ext)
+        logger.info(f"{entry.name} extracted to {extraction_path}")
+        os.remove(entry.path)
+        logger.info(f"{entry.name} was deleted!")
+    else:
+        shutil.unpack_archive(entry.path, extraction_path, ext)
+        logger.info(f"{entry.name} extracted to {extraction_path}")
+        os.remove(entry.path)
+        logger.info(f"{entry.name} was deleted!")
 
 
 def file_entry_handler(entry, dist_path, logger):
@@ -68,6 +86,11 @@ def main():
 
                     if ".pdf" in entry.name:
                         file_entry_handler(entry, pdf_dir, logger)
+
+                    if ".zip" in entry.name:
+                        compressed_entry_handler(entry, source, logger, 'zip')
+                    if ".7z" in entry.name:
+                        compressed_entry_handler(entry, source, logger, '7z')
 
     except KeyboardInterrupt:
         logger.info("Script was stopped!")
