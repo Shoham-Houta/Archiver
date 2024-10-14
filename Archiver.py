@@ -46,7 +46,7 @@ def compressed_entry_handler(entry, dist_path, logger, ext):
 
 
 def file_entry_handler(entry, dist_path, logger):
-    dir_path = dist_path + fr"\{datetime.datetime.now().strftime("%d-%m-%Y %H-%M")}"
+    dir_path = dist_path + fr"\{datetime.datetime.now().strftime("%d-%m-%Y")}"
     if not os.path.exists(dir_path):
         os.mkdir(dir_path)
         logger.info(f"{dir_path} - Folder created!")
