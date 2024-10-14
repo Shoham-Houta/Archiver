@@ -1,3 +1,2 @@
 watchdog~=5.0.3
 py7zr~=0.22.0
-pywin32
