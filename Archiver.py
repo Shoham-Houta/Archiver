@@ -57,7 +57,7 @@ def file_entry_handler(entry, dist_path, logger):
         logger.info(f"{entry.name} --> {dir_path}")
 
 
-def main(self):
+def main():
     event_handler: LoggingEventHandler = LoggingEventHandler()
     observer: Observer = Observer()
     observer.schedule(event_handler, source, recursive=True)
