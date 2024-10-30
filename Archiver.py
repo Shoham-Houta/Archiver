@@ -5,6 +5,8 @@ import shutil
 import datetime
 import time
 
+import smtplib
+from email.message import EmailMessage
 
 from py7zr import unpack_7zarchive
 from watchdog.events import LoggingEventHandler
@@ -26,6 +28,47 @@ else:
     pdf_dir: str = ""
     presentations_dir: str = ""
     source: str = ""
+
+email = EmailMessage()
+email["from"] = "shohamho@gmail.com"
+email["to"] = "houta@bgu.ac.il"
+email["subject"] = "מסמכים להדפסה"
+
+
+def parse_files(files):
+    files_definition = []
+    for file in files:
+        properties = dict()
+        properties["file name"] = file.name
+        properties["main type"] = 'application' if ".pdf" in file.name else 'text'
+        properties["sub type"] = 'pdf' if ".pdf" in file.name else 'plain'
+        properties["path"] = file.path
+        properties["entry"] = file
+        files_definition.append(properties)
+    return files_definition
+
+
+def create_email_content(files, logger):
+    for file in files:
+        try:
+            with open(file["path"], 'rb') as f:
+                file_data = f.read()
+            email.add_attachment(file_data, filename=file["file name"], maintype=file["main type"],
+                                 subtype=file["sub type"])
+            logger.info(f"{file['file name']} added!")
+            dest = pdf_dir if ".pdf" in file["file name"] else doc_dir
+            file_entry_handler(file["entry"], dest, logger)
+        except FileNotFoundError:
+            logger.error(f"{file['file name']} Skipped - was not found!")
+
+
+def send_for_printing(entries, logger: logging.Logger):
+    create_email_content(parse_files(entries), logger)
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+        smtp.ehlo()
+        smtp.login("shohamho@gmail.com", 'mcpz sdpu cjdm kltq')
+        smtp.send_message(email)
+    logger.info("Email sent!")
 
 
 def compressed_entry_handler(entry, dist_path, logger, ext):
@@ -76,6 +119,9 @@ def main():
         while True:
             time.sleep(1)
             with os.scandir(source) as entries:
+                files_to_print = [entry for entry in entries if "להדפסה" in entry.name]
+                if files_to_print:
+                    send_for_printing(files_to_print, logger)
                 for entry in entries:
                     if ".jpg" in entry.name or ".png" in entry.name:
                         file_entry_handler(entry, img_dir, logger)
@@ -93,6 +139,7 @@ def main():
                         compressed_entry_handler(entry, source, logger, 'zip')
                     if ".7z" in entry.name:
                         compressed_entry_handler(entry, source, logger, '7z')
+
 
     except KeyboardInterrupt:
         logger.info("Script was stopped!")
