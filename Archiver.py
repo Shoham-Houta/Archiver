@@ -12,10 +12,10 @@ from py7zr import unpack_7zarchive
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
 
-Current_User = "shoha"  # the user that runs the script
 
 # checks the user platform to initialize the correct os path format
 if platform.system() == "Windows":
+    Current_User = "shoha"  # the user that runs the script
     img_dir: str = rf"C:\Users\{Current_User}\Pictures"
     doc_dir: str = rf"C:\Users\{Current_User}\Documents\Docs"
     pdf_dir: str = rf"C:\Users\{Current_User}\Documents\PDFs"
@@ -23,16 +23,13 @@ if platform.system() == "Windows":
     logging_dir: str = rf"C:\Users\{Current_User}"
     source: str = rf"C:\Users\{Current_User}\Downloads"
 else:
+    Current_User = "shoham"  # the user that runs the script
     img_dir: str = ""
     doc_dir: str = ""
     pdf_dir: str = ""
     presentations_dir: str = ""
     source: str = ""
 
-email = EmailMessage()
-email["from"] = "shohamho@gmail.com"
-email["to"] = "houta@bgu.ac.il"
-email["subject"] = "מסמכים להדפסה"
 
 
 def parse_files(files):
@@ -47,28 +44,6 @@ def parse_files(files):
         files_definition.append(properties)
     return files_definition
 
-
-def create_email_content(files, logger):
-    for file in files:
-        try:
-            with open(file["path"], 'rb') as f:
-                file_data = f.read()
-            email.add_attachment(file_data, filename=file["file name"], maintype=file["main type"],
-                                 subtype=file["sub type"])
-            logger.info(f"{file['file name']} added!")
-            dest = pdf_dir if ".pdf" in file["file name"] else doc_dir
-            file_entry_handler(file["entry"], dest, logger)
-        except FileNotFoundError:
-            logger.error(f"{file['file name']} Skipped - was not found!")
-
-
-def send_for_printing(entries, logger: logging.Logger):
-    create_email_content(parse_files(entries), logger)
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.ehlo()
-        smtp.login("shohamho@gmail.com", 'mcpz sdpu cjdm kltq')
-        smtp.send_message(email)
-    logger.info("Email sent!")
 
 
 def compressed_entry_handler(entry, dist_path, logger, ext):
@@ -119,9 +94,6 @@ def main():
         while True:
             time.sleep(1)
             with os.scandir(source) as entries:
-                files_to_print = [entry for entry in entries if "להדפסה" in entry.name]
-                if files_to_print:
-                    send_for_printing(files_to_print, logger)
                 for entry in entries:
                     if ".jpg" in entry.name or ".png" in entry.name:
                         file_entry_handler(entry, img_dir, logger)
