@@ -77,7 +77,7 @@ def file_entry_handler(entry, dist_path, logger):
 
 def main():
     event_handler: LoggingEventHandler = LoggingEventHandler()
-    observer: Observer = Observer()
+    observer = Observer()
     observer.schedule(event_handler, source, recursive=True)
     observer.start()
     logger = logging.Logger(name="Archiver", level=logging.INFO)
