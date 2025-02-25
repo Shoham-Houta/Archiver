@@ -35,7 +35,8 @@ The **Archiver** script is a Python-based automation tool designed to monitor th
    ```
    or: 
    ```sh
-   pip install -r requirements.txt```
+   pip install -r requirements.txt
+   ```
 
 ## Usage
 
