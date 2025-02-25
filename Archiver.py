@@ -5,31 +5,28 @@ import shutil
 import datetime
 import time
 
-import smtplib
-from email.message import EmailMessage
-
 from py7zr import unpack_7zarchive
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
 
+# the user that runs the script
+Current_User = os.popen("whoami").read().strip()
 
 # checks the user platform to initialize the correct os path format
 if platform.system() == "Windows":
-    Current_User = "shoha"  # the user that runs the script
     img_dir: str = rf"C:\Users\{Current_User}\Pictures"
     doc_dir: str = rf"C:\Users\{Current_User}\Documents\Docs"
     pdf_dir: str = rf"C:\Users\{Current_User}\Documents\PDFs"
     presentations_dir: str = rf"C:\Users\{Current_User}\Documents\Presentations"
-    logging_dir: str = rf"C:\Users\{Current_User}"
+    logging_dir: str = f"C:\\Users\\{Current_User}\\"
     source: str = rf"C:\Users\{Current_User}\Downloads"
 else:
-    Current_User = "shoham"  # the user that runs the script
-    img_dir: str = ""
-    doc_dir: str = ""
-    pdf_dir: str = ""
-    presentations_dir: str = ""
-    source: str = ""
-
+    img_dir: str = f"/home/{Current_User}/Pictures"
+    doc_dir: str = f"/home/{Current_User}/Documents/Docs"
+    pdf_dir: str = f"/home/{Current_User}/Documents/PDFs"
+    presentations_dir: str = f"/home/{Current_User}/Documents/Presentations"
+    logging_dir: str = f"/home/{Current_User}/"
+    source: str = f"/home/{Current_User}/Downloads"
 
 
 def parse_files(files):
@@ -45,10 +42,10 @@ def parse_files(files):
     return files_definition
 
 
-
 def compressed_entry_handler(entry, dist_path, logger, ext):
     shutil.register_unpack_format('7z', [".7z"], unpack_7zarchive)
-    extraction_path = dist_path + rf"\{str(entry.name).removesuffix("." + ext)}"
+    extraction_path = dist_path + \
+        rf"\{str(entry.name).removesuffix("." + ext)}"
     if not os.path.exists(extraction_path):
         os.mkdir(extraction_path)
         logger.info(f"{extraction_path} - Folder created!")
@@ -64,7 +61,7 @@ def compressed_entry_handler(entry, dist_path, logger, ext):
 
 
 def file_entry_handler(entry, dist_path, logger):
-    dir_path = dist_path + fr"\{datetime.datetime.now().strftime("%d-%m-%Y")}"
+    dir_path = dist_path + fr"\{datetime.datetime.now().strftime("%d-%m-%Y")}" if platform.system() == "Windows" else dist_path + f"/{datetime.datetime.now().strftime("%d-%m-%Y")}"
     if not os.path.exists(dir_path):
         os.mkdir(dir_path)
         logger.info(f"{dir_path} - Folder created!")
@@ -81,7 +78,8 @@ def main():
     observer.schedule(event_handler, source, recursive=True)
     observer.start()
     logger = logging.Logger(name="Archiver", level=logging.INFO)
-    file_handler = logging.FileHandler(logging_dir + r"\archiver.log", mode='a', encoding="utf-8")
+    file_handler = logging.FileHandler(logging_dir + "archiver.log", mode='a', encoding="utf-8") if platform.system(
+    ) == "Windows" else logging.FileHandler(logging_dir + ".archiver.log", mode='a', encoding="utf-8")
     formatter = logging.Formatter(
         "{asctime} - {levelname} - {message}",
         style="{",
@@ -111,7 +109,6 @@ def main():
                         compressed_entry_handler(entry, source, logger, 'zip')
                     if ".7z" in entry.name:
                         compressed_entry_handler(entry, source, logger, '7z')
-
 
     except KeyboardInterrupt:
         logger.info("Script was stopped!")
