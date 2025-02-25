@@ -1,0 +1,15 @@
+{
+  "source_path": "/home/shoham/Downloads",
+  "dist_paths":{
+    "Image": "/home/shoham/Pictures",
+    "Document": "/home/shoham/Documents/Docs",
+    "PDF": "/home/shoham/Documents/PDFs",
+    "Slide": "/home/shoham/Documents/Presentations",
+    "SpreedSheet": "/home/shoham/Documents/SpreedSheets",
+    "Audio": "/home/shoham/Music",
+    "Video": "/home/shoham/Videos"
+  },
+  "log_path": "/home/shoham",
+  "log_levels":["INFO","WARNING","ERROR"],
+  "platform": "Linux"
+}

@@ -9,37 +9,11 @@ from py7zr import unpack_7zarchive
 from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
 
+from Utility import FileHandler
 # the user that runs the script
 Current_User = os.popen("whoami").read().strip()
 
-# checks the user platform to initialize the correct os path format
-if platform.system() == "Windows":
-    img_dir: str = rf"C:\Users\{Current_User}\Pictures"
-    doc_dir: str = rf"C:\Users\{Current_User}\Documents\Docs"
-    pdf_dir: str = rf"C:\Users\{Current_User}\Documents\PDFs"
-    presentations_dir: str = rf"C:\Users\{Current_User}\Documents\Presentations"
-    logging_dir: str = f"C:\\Users\\{Current_User}\\"
-    source: str = rf"C:\Users\{Current_User}\Downloads"
-else:
-    img_dir: str = f"/home/{Current_User}/Pictures"
-    doc_dir: str = f"/home/{Current_User}/Documents/Docs"
-    pdf_dir: str = f"/home/{Current_User}/Documents/PDFs"
-    presentations_dir: str = f"/home/{Current_User}/Documents/Presentations"
-    logging_dir: str = f"/home/{Current_User}/"
-    source: str = f"/home/{Current_User}/Downloads"
-
-
-def parse_files(files):
-    files_definition = []
-    for file in files:
-        properties = dict()
-        properties["file name"] = file.name
-        properties["main type"] = 'application' if ".pdf" in file.name else 'text'
-        properties["sub type"] = 'pdf' if ".pdf" in file.name else 'plain'
-        properties["path"] = file.path
-        properties["entry"] = file
-        files_definition.append(properties)
-    return files_definition
+handler = FileHandler()
 
 
 def compressed_entry_handler(entry, dist_path, logger, ext):
