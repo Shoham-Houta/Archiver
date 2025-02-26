@@ -5,6 +5,8 @@ import shutil
 import time
 import tracemalloc
 import functools
+import sys
+import platform
 
 
 def performance_debug(func):
@@ -40,6 +42,38 @@ def performance_debug(func):
 
     return wrapper
 
+def is_locked(file_path):
+    try:
+        with open(file_path, "a+") as f:
+            if platform.system() == "Windows":
+                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return False  # File is NOT locked
+    except (PermissionError, BlockingIOError, OSError):
+        return True  # File is locked
+
+def move_file_with_retry(file, destination, retries=5, delay=2):
+    """Tries to move a file, retrying if it's locked (e.g., by antivirus)."""
+    for attempt in range(retries):
+        if not is_locked(file["Path"]):  # Check if file is locked
+            try:
+                shutil.move(file["Path"], destination)
+                print(f"{file['File name']} ---> {destination}")
+                return  # Success
+            except PermissionError:
+                print(f"Permission denied: {file['Path']}. Retrying...")
+            except FileNotFoundError:
+                print(f"Error: {file['Path']} not found. Skipping...")
+                return
+            except Exception as e:
+                print(f"Unexpected error: {e}. Skipping {file['Path']}...")
+                return
+        else:
+            print(f"Attempt #{attempt+1}:\nFile {file['File name']} is locked (likely by antivirus). Retrying in {delay} seconds...")
+        time.sleep(delay)  # Wait before retrying
+    print(f"Skipping {file['File name']}: Still locked after {retries} attempts.")
+
 
 class FileHandler:
     def __init__(self,source,dist_paths,logger_output,logger_lvls,types):
@@ -53,7 +87,7 @@ class FileHandler:
     def source(self):
         return self._source
 
-    @performance_debug
+    
     def _parse_file(self,files):
         parsed_files = []
         for file in files:
@@ -75,36 +109,33 @@ class FileHandler:
                         break
         return parsed_files if parsed_files else None
 
-    @performance_debug
     def handle(self, files):
         parsed_files = self._parse_file(files)
         try:
             for file in parsed_files:
-                file_dist = path.Path(self._dist[file["Type"]])
-                if file_dist.exists():
-                    try:
-                        file_dist = file_dist / dt.datetime.now().strftime("%d-%m-%Y")
-                        file_dist.mkdir()
-                        self._distribute_file(file,file_dist)
-                    except FileExistsError:
-                            print("Path exists.")
-                            self._distribute_file(file,file_dist)
-                    except PermissionError:
-                        print(f"Permission denied: Cannot move the file {file["Path"]} to {file_dist}")
-                    except Exception as e:
-                        print(f"Error moving file: {e}")
+                file_dest = path.Path(self._dist[file["Type"]])
+                file_dest = file_dest / dt.datetime.now().strftime("%d-%m-%Y")
+                file_dest.mkdir(parents=True,exist_ok=True)
+                move_file_with_retry(file,file_dest,delay=3)
         except TypeError:
             print("No files.")
-    @staticmethod
-    def _distribute_file(file, dist):
-            print(f"{file["File name"]} --> {dist}")
-            shutil.move(file["Path"], dist)
+        except Exception as e:
+            print(f"Unexpected error in handle(): {e}")
+
+
+
+
 class ArchiveExtractor:
     pass
 
 if __name__=="__main__":
     import json
     # the user that runs the script
+    if platform.system() == "Windows":
+        import msvcrt  # Windows file locking
+    else:
+        import fcntl  # Linux/macOS file locking
+
     with open("config.json") as config_file:
         CONFIG = json.load(config_file)
 
