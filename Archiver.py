@@ -10,10 +10,13 @@ from watchdog.events import LoggingEventHandler
 from watchdog.observers import Observer
 
 from Utility import FileHandler
+import json
 # the user that runs the script
 Current_User = os.popen("whoami").read().strip()
+with open("config.json") as config_file:
+    CONFIG = json.load(config_file)
 
-handler = FileHandler()
+handler = FileHandler(CONFIG["source_path"],CONFIG["dist_paths"],CONFIG["log_path"],CONFIG["log_levels"],CONFIG["file_types"])
 
 
 def compressed_entry_handler(entry, dist_path, logger, ext):
@@ -47,49 +50,30 @@ def file_entry_handler(entry, dist_path, logger):
 
 
 def main():
-    event_handler: LoggingEventHandler = LoggingEventHandler()
-    observer = Observer()
-    observer.schedule(event_handler, source, recursive=True)
-    observer.start()
-    logger = logging.Logger(name="Archiver", level=logging.INFO)
-    file_handler = logging.FileHandler(logging_dir + "archiver.log", mode='a', encoding="utf-8") if platform.system(
-    ) == "Windows" else logging.FileHandler(logging_dir + ".archiver.log", mode='a', encoding="utf-8")
-    formatter = logging.Formatter(
-        "{asctime} - {levelname} - {message}",
-        style="{",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
+    # event_handler: LoggingEventHandler = LoggingEventHandler()
+    # observer = Observer()
+    # observer.schedule(event_handler, source, recursive=True)
+    # observer.start()
+    # logger = logging.Logger(name="Archiver", level=logging.INFO)
+    # file_handler = logging.FileHandler(logging_dir + "archiver.log", mode='a', encoding="utf-8") if platform.system(
+    # ) == "Windows" else logging.FileHandler(logging_dir + ".archiver.log", mode='a', encoding="utf-8")
+    # formatter = logging.Formatter(
+    #     "{asctime} - {levelname} - {message}",
+    #     style="{",
+    #     datefmt="%Y-%m-%d %H:%M:%S"
+    # )
 
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    # file_handler.setFormatter(formatter)
+    # logger.addHandler(file_handler)
+
     try:
         while True:
-            time.sleep(1)
-            with os.scandir(source) as entries:
+            # time.sleep(1)
+            with os.scandir(handler.source) as entries:
                 for entry in entries:
-                    if ".jpg" in entry.name or ".png" in entry.name:
-                        file_entry_handler(entry, img_dir, logger)
-
-                    if ".docx" in entry.name:
-                        file_entry_handler(entry, doc_dir, logger)
-
-                    if ".pptx" in entry.name:
-                        file_entry_handler(entry, presentations_dir, logger)
-
-                    if ".pdf" in entry.name:
-                        file_entry_handler(entry, pdf_dir, logger)
-
-                    if ".zip" in entry.name:
-                        compressed_entry_handler(entry, source, logger, 'zip')
-                    if ".7z" in entry.name:
-                        compressed_entry_handler(entry, source, logger, '7z')
-
+                    handler.Handle(entry)
     except KeyboardInterrupt:
-        logger.info("Script was stopped!")
         exit(0)
-    finally:
-        observer.stop()
-        observer.join()
 
 
 if __name__ == "__main__":

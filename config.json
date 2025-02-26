@@ -11,5 +11,14 @@
   },
   "log_path": "/home/shoham",
   "log_levels":["INFO","WARNING","ERROR"],
-  "platform": "Linux"
+  "file_types": {
+    "Document": [".docx",".txt",".md",".odt"],
+    "PDF": [".pdf"],
+    "SpreedSheet": [".xlsx",".ods"],
+    "Slide": [".pptx",".odp"],
+    "Image": [".png",".jpg",".jpeg"],
+    "Audio": [".mp3",".wav"],
+    "Video": [".mp4"],
+    "Archive": [".7z",".zip"]
+  }
 }
