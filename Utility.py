@@ -52,7 +52,7 @@ class FileHandler:
     @property
     def source(self):
         return self._source
-    
+
     @performance_debug
     def _parse_file(self,files):
         parsed_files = []
@@ -75,24 +75,26 @@ class FileHandler:
                         break
         return parsed_files if parsed_files else None
 
-
+    @performance_debug
     def handle(self, files):
         parsed_files = self._parse_file(files)
-        for file in parsed_files:
-            file_dist = path.Path(self._dist[file["Type"]])
-            if file_dist.exists():
-                try:
-                    file_dist = file_dist / dt.datetime.now().strftime("%d-%m-%Y")
-                    file_dist.mkdir()
-                    self._distribute_file(file,file_dist)
-                except FileExistsError:
-                        print("Path exists.")
+        try:
+            for file in parsed_files:
+                file_dist = path.Path(self._dist[file["Type"]])
+                if file_dist.exists():
+                    try:
+                        file_dist = file_dist / dt.datetime.now().strftime("%d-%m-%Y")
+                        file_dist.mkdir()
                         self._distribute_file(file,file_dist)
-                except PermissionError:
-                    print(f"Permission denied: Cannot move the file {file["Path"]} to {file_dist}")
-                except Exception as e:
-                    print(f"Error moving file: {e}")
-
+                    except FileExistsError:
+                            print("Path exists.")
+                            self._distribute_file(file,file_dist)
+                    except PermissionError:
+                        print(f"Permission denied: Cannot move the file {file["Path"]} to {file_dist}")
+                    except Exception as e:
+                        print(f"Error moving file: {e}")
+        except TypeError:
+            print("No files.")
     @staticmethod
     def _distribute_file(file, dist):
             print(f"{file["File name"]} --> {dist}")
@@ -107,5 +109,5 @@ if __name__=="__main__":
         CONFIG = json.load(config_file)
 
     handler = FileHandler(CONFIG["source_path"],CONFIG["dist_paths"],CONFIG["log_path"],CONFIG["log_levels"],CONFIG["file_types"])
-    entries= handler.source.iterdir()
+    entries = handler.source.iterdir()
     handler.handle(entries)
