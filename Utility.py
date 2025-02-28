@@ -6,6 +6,8 @@ import time
 import tracemalloc
 import functools
 import platform
+import py7zr
+import zipfile
 
 
 def performance_debug(func):
@@ -80,12 +82,14 @@ def move_file_with_retry(file, destination, retries=5, delay=2):
 
 
 class FileHandler:
-    def __init__(self, source, dist_paths, logger_output, logger_lvls, types):
+    def __init__(self, source, dest_paths, logger_output, logger_lvls, types, delete_archives=False):
         self._source = path.Path(source)
-        self._dist: dict = dist_paths
+        self._dest: dict = dest_paths
         self._logger_output = path.Path(logger_output)
         self._logger_levels: list = logger_lvls
         self._types: dict = types
+        self.archive_handler = ArchiveHandler(
+            dest_paths, delete_after_extract=delete_archives)
 
     @property
     def source(self):
@@ -98,6 +102,10 @@ class FileHandler:
 
             if file_path.is_file():
                 file_ext = file_path.suffix
+
+                if file_ext in self._types["Archive"] and self._is_protected(file_path):
+                    print(f"Skipping password-protected archive: {file_path}")
+                    continue
 
                 for file_type, extension in self._types.items():
                     if file_ext in extension and "~$" not in file_path.stem:
@@ -112,23 +120,70 @@ class FileHandler:
                         break
         return parsed_files if parsed_files else None
 
+    def _is_protected(self, file_path):
+        try:
+            if file_path.suffix == ".zip":
+                with zipfile.ZipFile(file_path) as zip_ref:
+                    # Try to read the first file's content to check for password protection
+                    try:
+                        zip_ref.read(zip_ref.namelist()[0])
+                    except RuntimeError as e:
+                        if 'encrypted' in str(e):
+                            return True
+            elif file_path.suffix == ".7z":
+                with py7zr.SevenZipFile(str(file_path), mode='r') as archive:
+                    return archive.needs_password()
+        except Exception as e:
+            print(f"Error reading {file_path}: {e}")
+        return False
+
     def handle(self, files):
         parsed_files = self._parse_file(files)
-        print(parsed_files)
         try:
             for file in parsed_files:
-                file_dest = path.Path(self._dist[file["Type"]])
-                file_dest = file_dest / dt.datetime.now().strftime("%d-%m-%Y")
-                file_dest.mkdir(parents=True, exist_ok=True)
-                move_file_with_retry(file, file_dest, delay=3)
+                if file["Type"] == "Archive" and file["Extension"] in self._types["Archive"]:
+                    self.archive_handler.extract(file)
+                else:
+                    file_dest = path.Path(self._dest[file["Type"]])
+                    file_dest = file_dest / dt.datetime.now().strftime("%d-%m-%Y")
+                    file_dest.mkdir(parents=True, exist_ok=True)
+                    move_file_with_retry(file, file_dest, delay=3)
         except TypeError:
             print("No files.")
         except Exception as e:
             print(f"Unexpected error in handle(): {e}")
 
 
-class ArchiveExtractor:
-    pass
+class ArchiveHandler():
+
+    def __init__(self, dest_paths, delete_after_extract=False):
+        self._dest = dest_paths
+        self._delete_after_extract = delete_after_extract
+
+    def extract(self, file):
+        archive_path = file["Path"]
+        extract_to = path.Path(self._dest[file["Type"]])/file["File name"]
+
+        try:
+            # Ensure extraction directory exists
+            extract_to.mkdir(parents=True, exist_ok=True)
+
+            if archive_path.suffix in {".zip", ".tar", ".gz", ".bz2"}:
+                shutil.unpack_archive(str(archive_path), str(extract_to))
+            elif archive_path.suffix == ".7z":
+                with py7zr.SevenZipFile(archive_path, mode="r", password="123") as archive:
+                    archive.extractall(extract_to)
+            else:
+                print(f"Unsupported archive format: {archive_path.suffix}")
+                return
+
+            print(f"Extracted {archive_path.name} to {extract_to}")
+
+            if self._delete_after_extract:
+                archive_path.unlink()
+
+        except Exception as e:
+            print(f"Failed to extract {archive_path}: {e}")
 
 
 if __name__ == "__main__":
@@ -142,7 +197,7 @@ if __name__ == "__main__":
     with open("config.json") as config_file:
         CONFIG = json.load(config_file)
 
-    handler = FileHandler(CONFIG["source_path"], CONFIG["dist_paths"],
-                          CONFIG["log_path"], CONFIG["log_levels"], CONFIG["file_types"])
+    handler = FileHandler(CONFIG["source_path"], CONFIG["dest_paths"],
+                          CONFIG["log_path"], CONFIG["log_levels"], CONFIG["file_types"], True)
     entries = handler.source.iterdir()
     handler.handle(entries)
