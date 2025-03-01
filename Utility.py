@@ -1,3 +1,4 @@
+import os
 import pathlib as path
 import datetime as dt
 import logging
@@ -8,6 +9,13 @@ import functools
 import platform
 import py7zr
 import zipfile
+import concurrent.futures
+import json
+
+if platform.system() == "Windows":
+    import msvcrt  # Windows file locking
+else:
+    import fcntl  # Linux/macOS file locking
 
 
 def performance_debug(func):
@@ -137,21 +145,33 @@ class FileHandler:
             print(f"Error reading {file_path}: {e}")
         return False
 
-    def handle(self, files):
-        parsed_files = self._parse_file(files)
+    def _process_file(self, file):
         try:
-            for file in parsed_files:
-                if file["Type"] == "Archive" and file["Extension"] in self._types["Archive"]:
-                    self.archive_handler.extract(file)
-                else:
-                    file_dest = path.Path(self._dest[file["Type"]])
-                    file_dest = file_dest / dt.datetime.now().strftime("%d-%m-%Y")
-                    file_dest.mkdir(parents=True, exist_ok=True)
-                    move_file_with_retry(file, file_dest, delay=3)
-        except TypeError:
-            print("No files.")
+            file_dest = path.Path(self._dest[file["Type"]])
+            file_dest = file_dest / dt.datetime.now().strftime("%d-%m-%Y")
+            file_dest.mkdir(parents=True, exist_ok=True)
+            if file["Type"] == "Archive" and file["Extension"] in self._types["Archive"]:
+                self.archive_handler.extract(file)
+            else:
+                move_file_with_retry(file, file_dest, delay=3)
         except Exception as e:
             print(f"Unexpected error in handle(): {e}")
+
+    @performance_debug
+    def handle(self, files):
+        parsed_files = self._parse_file(files)
+
+        if not parsed_files:
+            print("No files.")
+            return
+
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(parsed_files, os.cpu_count()*2))) as executor:
+                executor.map(self._process_file, parsed_files)
+        except Exception as e:
+            print(f"Thread pool error: {e}")
+
+        print("File handling complete.")
 
 
 class ArchiveHandler():
@@ -187,12 +207,6 @@ class ArchiveHandler():
 
 
 if __name__ == "__main__":
-    import json
-    # the user that runs the script
-    if platform.system() == "Windows":
-        import msvcrt  # Windows file locking
-    else:
-        import fcntl  # Linux/macOS file locking
 
     with open("config.json") as config_file:
         CONFIG = json.load(config_file)
