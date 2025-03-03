@@ -2,6 +2,7 @@ import os
 import pathlib as path
 import datetime as dt
 import logging
+import tarfile
 import shutil
 import time
 import tracemalloc
@@ -11,6 +12,7 @@ import py7zr
 import zipfile
 import concurrent.futures
 import json
+from py7zr.exceptions import Bad7zFile
 
 if platform.system() == "Windows":
     import msvcrt  # Windows file locking
@@ -79,7 +81,8 @@ def move_file_with_retry(file, destination, retries=5, delay=2):
                 print(f"Error: {file['Path']} not found. Skipping...")
                 return
             except Exception as e:
-                print(f"Unexpected error: {e}. Skipping {file['Path']}...")
+                print(
+                    f"Unexpected error ({type(e).__name__}) in file {file['Path']}: {e}. Skipping...")
                 return
         else:
             print(
@@ -87,6 +90,64 @@ def move_file_with_retry(file, destination, retries=5, delay=2):
         time.sleep(delay)  # Wait before retrying
     print(
         f"Skipping {file['File name']}: Still locked after {retries} attempts.")
+
+
+def is_corrupted(file_path):
+
+    file_path_obj = path.Path(file_path)
+    if not file_path_obj.exists():
+        return True  # File does not exist
+    if file_path_obj.stat().st_size == 0:
+        return True  # File is empty
+
+    try:
+        with open(file_path_obj, 'rb') as f:
+            f.read(1024)
+        return False  # File is not corrupted
+    except (IOError, OSError):
+        return True  # File is corrupted
+
+def is_archive_empty(file_path):
+    """Check if an archive is empty before processing."""
+    try:
+        file_path = path.Path(file_path)
+        if file_path.suffix == ".zip":
+            with zipfile.ZipFile(file_path, "r") as zip_ref:
+                return len(zip_ref.namelist()) == 0
+        elif file_path.suffix == ".7z":
+            with py7zr.SevenZipFile(file_path, "r") as archive:
+                return len(archive.getnames()) == 0
+        elif file_path.suffix in [".tar", ".gz", ".bz2"]:
+            with tarfile.open(file_path, "r:*") as archive:
+                return len(archive.getnames()) == 0
+        return False  # If not an archive, assume not empty
+    except Exception:
+        return True  # If there's an error, assume it's empty
+
+
+def is_archive_corrupted(file_path):
+    file_path_obj = path.Path(file_path)
+    try:
+        if file_path_obj.suffix == ".zip":
+            with zipfile.ZipFile(file_path_obj) as zip_ref:
+                if zip_ref.testzip() is not None:
+                    return True  # Archive is corrupted
+        elif file_path_obj.suffix == ".7z":
+            with py7zr.SevenZipFile(file_path_obj, mode='r') as archive:
+                if archive.test():
+                    return True  # Archive is corrupted
+        elif file_path_obj.suffix in {".tar", ".gz", ".bz2"}:
+            with tarfile.open(file_path_obj, 'r:*') as f:
+                f.getmembers()
+        return False
+    except (zipfile.BadZipFile, Bad7zFile, tarfile.TarError) as e:
+        # Archive is corrupted
+        print(f"Archive {file_path_obj} is corrupted ({type(e).__name__}).")
+        return True
+    except Exception as e:
+        print(
+            f"Error checking archive {file_path_obj} ({type(e).__name__}): {e}")
+        return True  # Archive is corrupted
 
 
 class FileHandler:
@@ -109,14 +170,28 @@ class FileHandler:
             file_path = path.Path(file)
 
             if file_path.is_file():
-                file_ext = file_path.suffix
 
-                if file_ext in self._types["Archive"] and self._is_protected(file_path):
-                    print(f"Skipping password-protected archive: {file_path}")
+                if is_corrupted(file_path):
+                    print(f"Skipping corrupted file: {file_path}")
+                    continue
+                if "~$" in file_path.stem:
+                    print(f"Skipping temporary file: {file_path}")
                     continue
 
                 for file_type, extension in self._types.items():
-                    if file_ext in extension and "~$" not in file_path.stem:
+                    file_ext = file_path.suffix
+                    if file_ext in set(extension):
+
+                        if is_archive_corrupted(file_path):
+                            print(f"Skipping corrupted archive: {file_path}")
+                            continue
+                        if  self._is_protected(file_path):
+                            print(
+                                f"Skipping password-protected archive: {file_path}")
+                            continue
+                        if is_archive_empty(file_path):
+                            print(f"Skipping empty archive: {file_path}")
+                            continue
                         parsed_files.append(
                             {
                                 "File name": file_path.stem,
@@ -148,25 +223,23 @@ class FileHandler:
     def _process_file(self, file):
         try:
             file_dest = path.Path(self._dest[file["Type"]])
-            file_dest = file_dest / dt.datetime.now().strftime("%d-%m-%Y")
-            file_dest.mkdir(parents=True, exist_ok=True)
             if file["Type"] == "Archive" and file["Extension"] in self._types["Archive"]:
                 self.archive_handler.extract(file)
             else:
+                file_dest = file_dest / dt.datetime.now().strftime("%d-%m-%Y")
+                file_dest.mkdir(parents=True, exist_ok=True)
                 move_file_with_retry(file, file_dest, delay=3)
         except Exception as e:
             print(f"Unexpected error in handle(): {e}")
 
-    @performance_debug
     def handle(self, files):
         parsed_files = self._parse_file(files)
 
         if not parsed_files:
-            print("No files.")
+            print("No files to process.")
             return
-
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(parsed_files, os.cpu_count()*2))) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(parsed_files), os.cpu_count()*2)) as executor:
                 executor.map(self._process_file, parsed_files)
         except Exception as e:
             print(f"Thread pool error: {e}")
@@ -174,7 +247,7 @@ class FileHandler:
         print("File handling complete.")
 
 
-class ArchiveHandler():
+class ArchiveHandler:
 
     def __init__(self, dest_paths, delete_after_extract=False):
         self._dest = dest_paths
