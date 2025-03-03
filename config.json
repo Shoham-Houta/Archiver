@@ -1,0 +1,29 @@
+{
+  "source_path": "C:\\Users\\shoha\\Downloads",
+  "dest_paths": {
+    "Image": "C:\\Users\\shoha\\Pictures",
+    "Document": "C:\\Users\\shoha\\Documents\\Docs",
+    "PDF": "C:\\Users\\shoha\\Documents\\PDFs",
+    "Slide": "C:\\Users\\shoha\\Documents\\Presentations",
+    "SpreedSheet": "C:\\Users\\shoha\\Documents\\SpreedSheets",
+    "Audio": "C:\\Users\\shoha\\Music",
+    "Video": "C:\\Users\\shoha\\Videos",
+    "Archive": "C:\\Users\\shoha\\Downloads"
+  },
+  "log_path": "C:\\Users\\shoha",
+  "log_levels": [
+    "INFO",
+    "WARNING",
+    "ERROR"
+  ],
+  "file_types": {
+    "Document": [".docx",".txt",".md",".odt"],
+    "PDF": [".pdf"],
+    "SpreedSheet": [".xlsx",".ods"],
+    "Slide": [".pptx",".odp"],
+    "Image": [".png",".jpg",".jpeg"],
+    "Audio": [".mp3",".wav"],
+    "Video": [".mp4"],
+    "Archive": [".7z",".zip",".tar",".gz"]
+  }
+}
