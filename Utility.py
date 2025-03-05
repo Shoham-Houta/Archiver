@@ -11,7 +11,6 @@ import platform
 import py7zr
 import zipfile
 import concurrent.futures
-import json
 from py7zr.exceptions import Bad7zFile
 
 if platform.system() == "Windows":
@@ -73,22 +72,22 @@ def move_file_with_retry(file, destination, retries=5, delay=2):
         if not is_locked(file["Path"]):  # Check if file is locked
             try:
                 shutil.move(file["Path"], destination)
-                print(f"{file['File name']} ---> {destination}")
+                logging.info(f"{file['File name']} ---> {destination}")
                 return  # Success
             except PermissionError:
-                print(f"Permission denied: {file['Path']}. Retrying...")
+                logging.warning(f"Permission denied: {file['Path']}. Retrying...")
             except FileNotFoundError:
-                print(f"Error: {file['Path']} not found. Skipping...")
+                logging.error(f"Error: {file['Path']} not found. Skipping...")
                 return
             except Exception as e:
-                print(
+                logging.error(
                     f"Unexpected error ({type(e).__name__}) in file {file['Path']}: {e}. Skipping...")
                 return
         else:
-            print(
+           logging.warning(
                 f"Attempt #{attempt+1}:\nFile {file['File name']} is locked (likely by antivirus). Retrying in {delay} seconds...")
         time.sleep(delay)  # Wait before retrying
-    print(
+    logging.error(
         f"Skipping {file['File name']}: Still locked after {retries} attempts.")
 
 
@@ -142,10 +141,10 @@ def is_archive_corrupted(file_path):
         return False
     except (zipfile.BadZipFile, Bad7zFile, tarfile.TarError) as e:
         # Archive is corrupted
-        print(f"Archive {file_path_obj} is corrupted ({type(e).__name__}).")
+        logging.warning(f"Archive {file_path_obj} is corrupted ({type(e).__name__}).")
         return True
     except Exception as e:
-        print(
+        logging.error(
             f"Error checking archive {file_path_obj} ({type(e).__name__}): {e}")
         return True  # Archive is corrupted
 
@@ -160,6 +159,39 @@ class FileHandler:
         self.archive_handler = ArchiveHandler(
             dest_paths, delete_after_extract=delete_archives)
 
+        self._init_logger()
+
+    def _init_logger(self):
+
+        self.logger = logging.getLogger("FileHandler")
+
+        level_mapping = {
+            "DEBUG": logging.DEBUG,
+            "INFO":logging.INFO,
+            "WARNING": logging.WARNING,
+            "ERROR": logging.ERROR
+        }
+        # Select the lowest logging level from the provided list
+        selected_level = min([level_mapping.get(level.upper(), logging.INFO) for level in self._logger_levels])
+
+        self.logger.setLevel(selected_level)
+
+        log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+        # Console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(log_formatter)
+        self.logger.addHandler(console_handler)
+
+        # File handler
+        log_file = self._logger_output / ".archiver.log"
+        file_handler = logging.FileHandler(log_file, mode="a")
+        file_handler.setFormatter(log_formatter)
+        self.logger.addHandler(file_handler)
+
+        self.logger.info(
+            f"Logging initialized with levels: {', '.join(self._logger_levels)} (Using: {logging.getLevelName(selected_level)})")
+
     @property
     def source(self):
         return self._source
@@ -172,10 +204,10 @@ class FileHandler:
             if file_path.is_file():
 
                 if is_corrupted(file_path):
-                    print(f"Skipping corrupted file: {file_path}")
+                    self.logger.info(f"Skipping corrupted file: {file_path}")
                     continue
                 if "~$" in file_path.stem:
-                    print(f"Skipping temporary file: {file_path}")
+                    self.logger.info(f"Skipping temporary file: {file_path}")
                     continue
 
                 for file_type, extension in self._types.items():
@@ -183,14 +215,14 @@ class FileHandler:
                     if file_ext in set(extension):
 
                         if is_archive_corrupted(file_path):
-                            print(f"Skipping corrupted archive: {file_path}")
+                            self.logger.info(f"Skipping corrupted archive: {file_path}")
                             continue
                         if  self._is_protected(file_path):
-                            print(
+                            self.logger.info(
                                 f"Skipping password-protected archive: {file_path}")
                             continue
                         if is_archive_empty(file_path):
-                            print(f"Skipping empty archive: {file_path}")
+                            self.logger.info(f"Skipping empty archive: {file_path}")
                             continue
                         parsed_files.append(
                             {
@@ -217,34 +249,36 @@ class FileHandler:
                 with py7zr.SevenZipFile(str(file_path), mode='r') as archive:
                     return archive.needs_password()
         except Exception as e:
-            print(f"Error reading {file_path}: {e}")
+            self.logger.error(f"Error reading {file_path}: {e}")
         return False
 
     def _process_file(self, file):
         try:
             file_dest = path.Path(self._dest[file["Type"]])
             if file["Type"] == "Archive" and file["Extension"] in self._types["Archive"]:
+                self.logger.info(f"Extracting archive: {file["Path"]}")
                 self.archive_handler.extract(file)
             else:
                 file_dest = file_dest / dt.datetime.now().strftime("%d-%m-%Y")
                 file_dest.mkdir(parents=True, exist_ok=True)
                 move_file_with_retry(file, file_dest, delay=3)
+                self.logger.info(f"Moved file: {file["Path"]} --> {file_dest}")
         except Exception as e:
-            print(f"Unexpected error in handle(): {e}")
+            self.logger.error(f"Unexpected error in handle(): {e}")
 
     def handle(self, files):
         parsed_files = self._parse_file(files)
 
         if not parsed_files:
-            print("No files to process.")
+            self.logger.info("No files to process.")
             return
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(parsed_files), os.cpu_count()*2)) as executor:
                 executor.map(self._process_file, parsed_files)
         except Exception as e:
-            print(f"Thread pool error: {e}")
+            self.logger.error(f"Thread pool error: {e}")
 
-        print("File handling complete.")
+        self.logger.info("File handling complete.")
 
 
 class ArchiveHandler:
@@ -267,24 +301,13 @@ class ArchiveHandler:
                 with py7zr.SevenZipFile(archive_path, mode="r", password="123") as archive:
                     archive.extractall(extract_to)
             else:
-                print(f"Unsupported archive format: {archive_path.suffix}")
+                logging.warning(f"Unsupported archive format: {archive_path.suffix}")
                 return
 
-            print(f"Extracted {archive_path.name} to {extract_to}")
+            logging.info(f"Extracted {archive_path.name} to {extract_to}")
 
             if self._delete_after_extract:
                 archive_path.unlink()
 
         except Exception as e:
-            print(f"Failed to extract {archive_path}: {e}")
-
-
-if __name__ == "__main__":
-
-    with open("config.json") as config_file:
-        CONFIG = json.load(config_file)
-
-    handler = FileHandler(CONFIG["source_path"], CONFIG["dest_paths"],
-                          CONFIG["log_path"], CONFIG["log_levels"], CONFIG["file_types"], True)
-    entries = handler.source.iterdir()
-    handler.handle(entries)
+            logging.error(f"Failed to extract {archive_path}: {e}")

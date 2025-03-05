@@ -6,7 +6,7 @@ with open("config.json") as config_file:
 
 
 def main():
-    handler = FileHandler(CONFIG["source_path"], CONFIG["dist_paths"],
+    handler = FileHandler(CONFIG["source_path"], CONFIG["dest_paths"],
                           CONFIG["log_path"], CONFIG["log_levels"], CONFIG["file_types"])
     entries = handler.source.iterdir()
     handler.handle(entries)

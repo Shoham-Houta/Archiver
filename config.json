@@ -1,16 +1,16 @@
 {
-  "source_path": "C:\\Users\\shoha\\Downloads",
+  "source_path": "/home/shoham/Downloads",
   "dest_paths": {
-    "Image": "C:\\Users\\shoha\\Pictures",
-    "Document": "C:\\Users\\shoha\\Documents\\Docs",
-    "PDF": "C:\\Users\\shoha\\Documents\\PDFs",
-    "Slide": "C:\\Users\\shoha\\Documents\\Presentations",
-    "SpreedSheet": "C:\\Users\\shoha\\Documents\\SpreedSheets",
-    "Audio": "C:\\Users\\shoha\\Music",
-    "Video": "C:\\Users\\shoha\\Videos",
-    "Archive": "C:\\Users\\shoha\\Downloads"
+    "Image": "/home/shoham/Pictures",
+    "Document": "/home/shoham/Documents/Docs",
+    "PDF": "/home/shoham/Documents/PDFs",
+    "Slide": "/home/shoham/Documents/Presentations",
+    "SpreedSheet": "/home/shoham/Documents/SpreedSheets",
+    "Audio": "/home/shoham/Music",
+    "Video": "/home/shoham/Videos",
+    "Archive": "/home/shoham/Downloads"
   },
-  "log_path": "C:\\Users\\shoha",
+  "log_path": "/home/shoham",
   "log_levels": [
     "INFO",
     "WARNING",

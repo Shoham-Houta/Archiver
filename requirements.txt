@@ -1,3 +1,5 @@
 watchdog
-py7zr
-shutil
+py7zr~=0.20.5
+
+
+pytest~=8.3.4
